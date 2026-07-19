@@ -64,7 +64,7 @@ a {
 .header {
   background: linear-gradient(135deg, var(--green-700), var(--green-900));
   color: #fff;
-  padding: 12px 16px 0;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 0;
   z-index: 500;
   box-shadow: var(--shadow-md);
 }
@@ -817,11 +817,11 @@ a {
     max-width: none;
     height: 100%;
     border-right: none;
-    padding-bottom: 64px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
   }
   .map-pane {
     height: 100%;
-    padding-bottom: 56px;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
   }
   .list-pane[data-hidden='true'],
   .map-pane[data-hidden='true'] {
@@ -833,7 +833,8 @@ a {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 56px;
+    height: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface);
     border-top: 1px solid var(--line);
     z-index: 600;

@@ -36,6 +36,33 @@ functional out of the box.
 
 ---
 
+## 📱 Installable mobile app (PWA)
+
+PlayFinder is a **Progressive Web App**, so it installs and behaves like a
+native mobile app today — no app store required:
+
+- **Add to Home Screen** on iOS (Share → Add to Home Screen) or Android
+  (install prompt / menu → Install app). It launches full-screen with its own
+  🌱 icon and no browser chrome (`display: standalone`).
+- **Works offline** — a service worker (`public/sw.js`) caches the app shell
+  and previously-viewed map tiles, so it opens and browses without a
+  connection.
+- **Safe-area aware** — respects notches / home indicators on modern phones.
+
+Because it's already a self-contained web app + PWA, wrapping it for the
+**App Store / Google Play** later is straightforward with
+[Capacitor](https://capacitorjs.com/): `npm i @capacitor/core @capacitor/cli`,
+`npx cap init`, point the webDir at `dist/`, then `npx cap add ios` /
+`npx cap add android`. No app rewrite needed — the same build ships to the web,
+the home screen, and the stores. (Not wired up yet; ready to add when you're
+publishing.)
+
+> Note: PWA features (service worker, install) require HTTPS or `localhost`,
+> and are enabled in production builds only. Run `npm run build && npm run
+> preview` to exercise them locally.
+
+---
+
 ## Features (MVP)
 
 ### 📍 Location services
