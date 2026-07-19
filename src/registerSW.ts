@@ -6,9 +6,14 @@ export function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return
   if (!import.meta.env.PROD) return
 
+  // Resolve against the deploy base so it works at a subpath (GitHub Pages)
+  // as well as at the root (local / native).
+  const base = import.meta.env.BASE_URL
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('Service worker registration failed:', err)
-    })
+    navigator.serviceWorker
+      .register(`${base}sw.js`, { scope: base })
+      .catch((err) => {
+        console.warn('Service worker registration failed:', err)
+      })
   })
 }

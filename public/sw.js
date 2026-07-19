@@ -70,18 +70,22 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
 
   // Navigation requests: network-first, fall back to cached app shell so the
-  // app opens offline.
+  // app opens offline. Cached by the actual URL so it works at the site root
+  // or a project subpath (e.g. GitHub Pages /Touch-Grass/).
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
+        const cache = await caches.open(APP_SHELL)
         try {
           const res = await fetch(request)
-          const cache = await caches.open(APP_SHELL)
-          cache.put('/', res.clone())
+          cache.put(request, res.clone())
           return res
         } catch {
-          const cache = await caches.open(APP_SHELL)
-          return (await cache.match('/')) || (await cache.match(request)) || Response.error()
+          return (
+            (await cache.match(request)) ||
+            (await cache.match(self.registration.scope)) ||
+            Response.error()
+          )
         }
       })(),
     )
