@@ -37,8 +37,6 @@ jobs:
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Build
         # base_path from configure-pages is like "/Touch-Grass"; Vite wants a
