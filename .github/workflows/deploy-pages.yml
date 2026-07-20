@@ -34,16 +34,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Configure Pages
-        id: pages
-        uses: actions/configure-pages@v5
-
+      # NOTE: We deliberately do NOT use actions/configure-pages here. Its only
+      # job is to compute the base path, and its Pages API call has been
+      # intermittently returning 503s. The base path is fixed for this repo, so
+      # we hardcode it and keep the build independent of that flaky call.
       - name: Build
-        # base_path from configure-pages is like "/Touch-Grass"; Vite wants a
-        # trailing slash.
         run: npm run build
         env:
-          VITE_BASE: ${{ steps.pages.outputs.base_path }}/
+          VITE_BASE: /Touch-Grass/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
