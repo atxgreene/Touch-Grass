@@ -16,8 +16,11 @@ interface Props {
 }
 
 function directionsUrl(f: Facility): string {
-  const q = encodeURIComponent(`${f.name}, ${f.address}, ${f.city}, ${f.state}`)
-  return `https://www.google.com/maps/dir/?api=1&destination=${q}`
+  // With a street address, send a searchable place string; otherwise exact coords.
+  const dest = f.address
+    ? `${f.name}, ${f.address}${f.city ? `, ${f.city}` : ''}${f.state ? `, ${f.state}` : ''}`
+    : `${f.lat},${f.lng}`
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`
 }
 
 const SPORT_LABELS: Record<string, string> = {
@@ -39,6 +42,13 @@ function renderVal(key: string, val: unknown): string {
   return String(val)
 }
 
+function costLabel(f: Facility): string | null {
+  if (f.cost === 'free') return 'Free'
+  if (f.price) return f.price
+  if (f.cost === 'paid') return 'Paid'
+  return null
+}
+
 export function PlaceCard({
   facility,
   distance,
@@ -48,9 +58,22 @@ export function PlaceCard({
   onToggleExpand,
   onToggleFav,
 }: Props) {
-  const status = openStatus(facility.hours, now)
+  const status = facility.hours ? openStatus(facility.hours, now) : null
   const today = now.getDay()
   const primary = getSport(facility.sports[0])
+  const cost = costLabel(facility)
+
+  const accessParts = [
+    facility.access === 'public' ? 'Public' : facility.access === 'private' ? 'Private' : null,
+    facility.environment === 'both'
+      ? 'Indoor & outdoor'
+      : facility.environment === 'indoor'
+        ? 'Indoor'
+        : facility.environment === 'outdoor'
+          ? 'Outdoor'
+          : null,
+    cost,
+  ].filter(Boolean)
 
   return (
     <article className={`card${expanded ? ' expanded' : ''}`}>
@@ -66,15 +89,27 @@ export function PlaceCard({
           <span className="card__name">{facility.name}</span>
           <span className="card__meta">
             <span>{formatDistance(distance)}</span>
-            <span className="dot">·</span>
-            <span className={status.open ? 'ok' : 'no'}>
-              {status.open ? 'Open' : 'Closed'}
-            </span>
-            <span className="dot">·</span>
-            <span>{facility.cost === 'free' ? 'Free' : facility.price}</span>
+            {status && (
+              <>
+                <span className="dot">·</span>
+                <span className={status.open ? 'ok' : 'no'}>
+                  {status.open ? 'Open' : 'Closed'}
+                </span>
+              </>
+            )}
+            {cost && (
+              <>
+                <span className="dot">·</span>
+                <span>{cost}</span>
+              </>
+            )}
           </span>
           <span className="card__tags">
-            <StarRating value={facility.rating} count={facility.reviewCount} />
+            {facility.rating != null ? (
+              <StarRating value={facility.rating} count={facility.reviewCount} />
+            ) : (
+              <span className="unrated">No reviews yet</span>
+            )}
             <span className="card__sportemojis">
               {facility.sports.map((s) => (
                 <span key={s} title={getSport(s).name}>
@@ -91,7 +126,7 @@ export function PlaceCard({
 
       {expanded && (
         <div className="card__detail">
-          <p className="card__desc">{facility.description}</p>
+          {facility.description && <p className="card__desc">{facility.description}</p>}
 
           <div className="card__actions">
             <a
@@ -107,6 +142,11 @@ export function PlaceCard({
                 📞 Call
               </a>
             )}
+            {facility.website && (
+              <a className="btn" href={facility.website} target="_blank" rel="noreferrer">
+                🌐 Website
+              </a>
+            )}
             <button
               className={`btn fav${favorite ? ' on' : ''}`}
               onClick={onToggleFav}
@@ -120,32 +160,40 @@ export function PlaceCard({
             <div>
               <dt>Where</dt>
               <dd>
-                {facility.address}, {facility.city}, {facility.state} {facility.zip}
+                {facility.address
+                  ? [facility.address, facility.city, facility.state, facility.zip]
+                      .filter(Boolean)
+                      .join(', ')
+                  : `Pin location — tap Directions (${facility.lat.toFixed(4)}, ${facility.lng.toFixed(4)})`}
               </dd>
             </div>
-            <div>
-              <dt>Access</dt>
-              <dd>
-                {facility.access === 'public' ? 'Public' : 'Private'} ·{' '}
-                {facility.environment === 'both'
-                  ? 'Indoor & outdoor'
-                  : facility.environment === 'indoor'
-                    ? 'Indoor'
-                    : 'Outdoor'}{' '}
-                · {facility.cost === 'free' ? 'Free' : facility.price}
-              </dd>
-            </div>
-            <div>
-              <dt>Today</dt>
-              <dd>
-                {facility.hours[today]
-                  ? `${formatTime(facility.hours[today]!.open)} – ${formatTime(
-                      facility.hours[today]!.close,
-                    )}`
-                  : 'Closed'}{' '}
-                <span className={status.open ? 'ok' : 'no'}>({status.label})</span>
-              </dd>
-            </div>
+            {accessParts.length > 0 && (
+              <div>
+                <dt>Access</dt>
+                <dd>{accessParts.join(' · ')}</dd>
+              </div>
+            )}
+            {(facility.hours || facility.openingHoursRaw) && (
+              <div>
+                <dt>Today</dt>
+                <dd>
+                  {facility.hours ? (
+                    <>
+                      {facility.hours[today]
+                        ? `${formatTime(facility.hours[today]!.open)} – ${formatTime(
+                            facility.hours[today]!.close,
+                          )}`
+                        : 'Closed'}{' '}
+                      {status && (
+                        <span className={status.open ? 'ok' : 'no'}>({status.label})</span>
+                      )}
+                    </>
+                  ) : (
+                    facility.openingHoursRaw
+                  )}
+                </dd>
+              </div>
+            )}
           </dl>
 
           {facility.sports.some((s) => facility.sportDetails[s]) && (
@@ -174,32 +222,40 @@ export function PlaceCard({
             </div>
           )}
 
-          <div className="card__block">
-            <h4>Amenities</h4>
-            <div className="chips">
-              {facility.amenities.map((a) => (
-                <span className="chip" key={a}>
-                  {a}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="card__block">
-            <h4>Hours</h4>
-            <table className="hours">
-              <tbody>
-                {facility.hours.map((h, i) => (
-                  <tr key={i} className={i === today ? 'today' : ''}>
-                    <td>{DAY_NAMES[i]}</td>
-                    <td>
-                      {h ? `${formatTime(h.open)} – ${formatTime(h.close)}` : 'Closed'}
-                    </td>
-                  </tr>
+          {facility.amenities.length > 0 && (
+            <div className="card__block">
+              <h4>Amenities</h4>
+              <div className="chips">
+                {facility.amenities.map((a) => (
+                  <span className="chip" key={a}>
+                    {a}
+                  </span>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          )}
+
+          {facility.hours && (
+            <div className="card__block">
+              <h4>Hours</h4>
+              <table className="hours">
+                <tbody>
+                  {facility.hours.map((h, i) => (
+                    <tr key={i} className={i === today ? 'today' : ''}>
+                      <td>{DAY_NAMES[i]}</td>
+                      <td>
+                        {h ? `${formatTime(h.open)} – ${formatTime(h.close)}` : 'Closed'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {facility.source === 'osm' && (
+            <p className="card__source">Data from OpenStreetMap — details may be incomplete.</p>
+          )}
         </div>
       )}
     </article>

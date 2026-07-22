@@ -60,44 +60,45 @@ export interface SportDetails {
   discHoles?: number
 }
 
+/**
+ * A place to play. Curated seed entries have every field filled in;
+ * places discovered live from OpenStreetMap are sparser — anything
+ * OSM doesn't know is simply undefined and the UI omits it.
+ */
 export interface Facility {
   id: string
   name: string
   sports: SportId[]
   lat: number
   lng: number
-  address: string
-  city: string
-  state: string
-  zip: string
-  access: Access
-  environment: Environment
-  cost: Cost
+  address?: string
+  city?: string
+  state?: string
+  zip?: string
+  access?: Access
+  environment?: Environment
+  cost?: Cost
   /** Human-readable price info, e.g. "$25 / round" or "Free" */
-  price: string
+  price?: string
   phone?: string
   website?: string
   /** Gradient seeds used to render placeholder photos without external assets */
   photoSeeds: string[]
-  hours: WeeklyHours
+  /** Structured weekly hours (curated data only) */
+  hours?: WeeklyHours
+  /** Raw OSM opening_hours string when structured hours are unknown */
+  openingHoursRaw?: string
   amenities: string[]
-  rating: number
-  reviewCount: number
+  rating?: number
+  reviewCount?: number
   reviews: Review[]
   sportDetails: Partial<Record<SportId, SportDetails>>
-  description: string
+  description?: string
+  /** Where this record came from; curated seed entries omit it */
+  source?: 'osm'
 }
 
 export interface Coords {
   lat: number
   lng: number
-}
-
-export interface Filters {
-  access: Access | 'any'
-  environment: Environment | 'any'
-  cost: Cost | 'any'
-  /** Max distance in miles, or null for no limit */
-  maxDistance: number | null
-  openNow: boolean
 }

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import type { SportId } from './types'
-import { FACILITIES } from './data/facilities'
 import { SPORTS, getSport } from './data/sports'
 import { distanceMiles } from './lib/distance'
 import { isOpenAt } from './lib/hours'
+import { geocodeArea, type Area } from './lib/osm'
 import { useGeolocation } from './hooks/useGeolocation'
+import { usePlaces } from './hooks/usePlaces'
 import { useIdList } from './hooks/useLocalStorage'
 import { PlaceCard } from './components/PlaceCard'
 
@@ -12,30 +13,64 @@ type Sort = 'distance' | 'rating' | 'name'
 
 export default function App() {
   const geo = useGeolocation()
+  const [pickedArea, setPickedArea] = useState<Area | null>(null)
+  const [areaQuery, setAreaQuery] = useState('')
+  const [areaBusy, setAreaBusy] = useState(false)
+  const [areaError, setAreaError] = useState<string | null>(null)
+
   const [sport, setSport] = useState<SportId | null>(null)
-  const [search, setSearch] = useState('')
   const [sort, setSort] = useState<Sort>('distance')
   const [openNow, setOpenNow] = useState(false)
   const [favesOnly, setFavesOnly] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const favorites = useIdList('pf:favorites')
 
-  const now = new Date()
-  const term = search.trim().toLowerCase()
+  // Active search area: an explicit city search wins; otherwise the user's
+  // location (or the Austin fallback when permission is unavailable).
+  const area: Area = pickedArea ?? {
+    label: geo.usingFallback ? 'Austin, TX' : 'your location',
+    coords: geo.coords,
+  }
+  const { status, places, retry } = usePlaces(area)
 
-  const list = FACILITIES.filter((f) => (sport ? f.sports.includes(sport) : true))
+  const now = new Date()
+
+  const searchArea = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const q = areaQuery.trim()
+    if (!q || areaBusy) return
+    setAreaBusy(true)
+    setAreaError(null)
+    try {
+      const found = await geocodeArea(q)
+      if (!found) {
+        setAreaError(`Couldn't find “${q}” — try a city name.`)
+      } else {
+        setPickedArea(found)
+        setExpandedId(null)
+      }
+    } catch {
+      setAreaError('Area search is unreachable right now — try again in a moment.')
+    } finally {
+      setAreaBusy(false)
+    }
+  }
+
+  const useMyLocation = () => {
+    setPickedArea(null)
+    setAreaQuery('')
+    setAreaError(null)
+    setExpandedId(null)
+    geo.locate()
+  }
+
+  const list = places
+    .filter((f) => (sport ? f.sports.includes(sport) : true))
     .filter((f) => (favesOnly ? favorites.has(f.id) : true))
-    .filter((f) => (openNow ? isOpenAt(f.hours, now) : true))
-    .filter(
-      (f) =>
-        !term ||
-        f.name.toLowerCase().includes(term) ||
-        f.city.toLowerCase().includes(term) ||
-        f.address.toLowerCase().includes(term),
-    )
-    .map((f) => ({ f, distance: distanceMiles(geo.coords, { lat: f.lat, lng: f.lng }) }))
+    .filter((f) => (openNow ? (f.hours ? isOpenAt(f.hours, now) : false) : true))
+    .map((f) => ({ f, distance: distanceMiles(area.coords, { lat: f.lat, lng: f.lng }) }))
     .sort((a, b) => {
-      if (sort === 'rating') return b.f.rating - a.f.rating
+      if (sort === 'rating') return (b.f.rating ?? -1) - (a.f.rating ?? -1)
       if (sort === 'name') return a.f.name.localeCompare(b.f.name)
       return a.distance - b.distance
     })
@@ -46,17 +81,21 @@ export default function App() {
         <div className="brand">
           <span className="brand__mark">🌱</span> PlayFinder
         </div>
-        <p className="tagline">Find places to play any sport near you</p>
-        <div className="search">
-          <span aria-hidden>🔍</span>
+        <p className="tagline">Find places to play any sport — anywhere</p>
+        <form className="search" onSubmit={searchArea}>
+          <span aria-hidden>📍</span>
           <input
             type="search"
-            placeholder="Search by name or city…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search places"
+            placeholder="Search any city or area…"
+            value={areaQuery}
+            onChange={(e) => setAreaQuery(e.target.value)}
+            aria-label="Search a city or area"
           />
-        </div>
+          <button type="submit" className="go" disabled={areaBusy}>
+            {areaBusy ? '…' : 'Go'}
+          </button>
+        </form>
+        {areaError && <p className="area-error">{areaError}</p>}
       </header>
 
       <nav className="sports" aria-label="Filter by sport">
@@ -106,7 +145,17 @@ export default function App() {
       </div>
 
       <main className="list">
-        {list.length === 0 ? (
+        {status === 'loading' && (
+          <div className="notice">Searching {area.label}…</div>
+        )}
+        {status === 'error' && (
+          <div className="notice error">
+            Couldn't reach OpenStreetMap for live results.
+            <button onClick={retry}>Retry</button>
+          </div>
+        )}
+
+        {list.length === 0 && status !== 'loading' ? (
           <div className="empty">
             <div className="empty__emoji">
               {favesOnly ? '💚' : sport ? getSport(sport).emoji : '🔎'}
@@ -115,7 +164,9 @@ export default function App() {
             <p>
               {favesOnly
                 ? 'Tap Save on any place to add it here.'
-                : 'Try a different sport or clear your filters.'}
+                : openNow
+                  ? 'Nothing verifiably open right now — try turning off "Open now".'
+                  : 'Try a different sport or search another area.'}
             </p>
           </div>
         ) : (
@@ -137,11 +188,10 @@ export default function App() {
       </main>
 
       <footer className="foot">
-        {geo.usingFallback ? (
-          <button onClick={geo.locate}>📍 Showing Austin, TX · Use my location</button>
-        ) : (
-          <span>📍 Showing places near you</span>
-        )}
+        <button onClick={useMyLocation}>
+          📍 {pickedArea ? `Showing ${pickedArea.label} · Use my location` : geo.usingFallback ? 'Showing Austin, TX · Use my location' : 'Showing places near you'}
+        </button>
+        <p className="credit">Live results © OpenStreetMap contributors</p>
       </footer>
     </div>
   )
